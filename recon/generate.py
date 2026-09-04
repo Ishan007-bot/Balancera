@@ -39,7 +39,9 @@ HARD_BATCH_MIX: dict[Case, int] = {
 }
 
 NARRATION_TEMPLATES = [
-    "NEFT-RAZORPAYSOFT-UTR{utr}-SETTLEMENT",
+    # References already carry a "UTR" prefix, so the template must not add a
+    # second one (it produced "UTRUTR8842910" before this was noticed).
+    "NEFT-RAZORPAYSOFT-{utr}-SETTLEMENT",
     "IMPS/{utr}/RAZORPAY/COLLECTION",
     "RTGS RZPYSOFT {utr} NET STLMT",
     "UPI-RAZORPAY-{utr}",
