@@ -7,5 +7,9 @@ venv/
 # Generated artifacts
 data/*
 !data/sample/
+!data/sample/**
 runs/*
 !runs/.gitkeep
+
+# Internal working notes, not part of the submission
+SPEC_AMENDMENTS.md

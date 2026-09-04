@@ -1,0 +1,549 @@
+{
+  "seed": 42,
+  "hard_ratio": 0.4,
+  "generated_at": "2026-01-01T00:00:00",
+  "opening_balance_paise": 5000000,
+  "counts": {
+    "orders": 193,
+    "payments": 190,
+    "settlements": 30,
+    "bank_rows": 35
+  },
+  "case_counts": {
+    "ambiguous_amount": 2,
+    "clean_batch": 18,
+    "mangled_utr": 2,
+    "missing_utr": 2,
+    "partial_batch": 2,
+    "rounding_drift": 2,
+    "weekend_delay": 2
+  },
+  "matches": [
+    {
+      "bank_txn_id": "BNK0001",
+      "payment_ids": [
+        "PAY00045",
+        "PAY00046",
+        "PAY00047",
+        "PAY00048",
+        "PAY00049"
+      ],
+      "settlement_id": "STL0008",
+      "case": "clean_batch",
+      "credit_paise": 1798636,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0002",
+      "payment_ids": [
+        "PAY00114",
+        "PAY00115",
+        "PAY00116",
+        "PAY00117",
+        "PAY00118",
+        "PAY00119",
+        "PAY00120"
+      ],
+      "settlement_id": "STL0019",
+      "case": "clean_batch",
+      "credit_paise": 3111391,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0003",
+      "payment_ids": [
+        "PAY00085",
+        "PAY00086",
+        "PAY00087",
+        "PAY00088",
+        "PAY00089"
+      ],
+      "settlement_id": "STL0014",
+      "case": "mangled_utr",
+      "credit_paise": 2165742,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0005",
+      "payment_ids": [
+        "PAY00159",
+        "PAY00160",
+        "PAY00161",
+        "PAY00162",
+        "PAY00163"
+      ],
+      "settlement_id": "STL0026",
+      "case": "clean_batch",
+      "credit_paise": 2447172,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0006",
+      "payment_ids": [
+        "PAY00121",
+        "PAY00122",
+        "PAY00123",
+        "PAY00124",
+        "PAY00125",
+        "PAY00126"
+      ],
+      "settlement_id": "STL0020",
+      "case": "clean_batch",
+      "credit_paise": 2297647,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0007",
+      "payment_ids": [
+        "PAY00050",
+        "PAY00051",
+        "PAY00052",
+        "PAY00053",
+        "PAY00054",
+        "PAY00055",
+        "PAY00056"
+      ],
+      "settlement_id": "STL0009",
+      "case": "clean_batch",
+      "credit_paise": 3614386,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0008",
+      "payment_ids": [
+        "PAY00127",
+        "PAY00128",
+        "PAY00129",
+        "PAY00130",
+        "PAY00131"
+      ],
+      "settlement_id": "STL0021",
+      "case": "clean_batch",
+      "credit_paise": 2679495,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0009",
+      "payment_ids": [
+        "PAY00184",
+        "PAY00185",
+        "PAY00186",
+        "PAY00187",
+        "PAY00188",
+        "PAY00189",
+        "PAY00190"
+      ],
+      "settlement_id": "STL0030",
+      "case": "mangled_utr",
+      "credit_paise": 3769678,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0010",
+      "payment_ids": [
+        "PAY00013",
+        "PAY00014",
+        "PAY00015",
+        "PAY00016",
+        "PAY00017"
+      ],
+      "settlement_id": "STL0003",
+      "case": "clean_batch",
+      "credit_paise": 3049098,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0011",
+      "payment_ids": [
+        "PAY00018",
+        "PAY00019",
+        "PAY00020",
+        "PAY00021",
+        "PAY00022",
+        "PAY00023"
+      ],
+      "settlement_id": "STL0004",
+      "case": "rounding_drift",
+      "credit_paise": 3215986,
+      "withheld_payment_id": null,
+      "drift_paise": 5
+    },
+    {
+      "bank_txn_id": "BNK0012",
+      "payment_ids": [
+        "PAY00132",
+        "PAY00133",
+        "PAY00134",
+        "PAY00135",
+        "PAY00136",
+        "PAY00137"
+      ],
+      "settlement_id": "STL0022",
+      "case": "weekend_delay",
+      "credit_paise": 2628074,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0013",
+      "payment_ids": [
+        "PAY00037",
+        "PAY00038",
+        "PAY00039",
+        "PAY00040",
+        "PAY00041",
+        "PAY00042",
+        "PAY00043",
+        "PAY00044"
+      ],
+      "settlement_id": "STL0007",
+      "case": "clean_batch",
+      "credit_paise": 4616537,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0014",
+      "payment_ids": [
+        "PAY00095",
+        "PAY00096",
+        "PAY00097",
+        "PAY00098",
+        "PAY00099"
+      ],
+      "settlement_id": "STL0016",
+      "case": "rounding_drift",
+      "credit_paise": 1722440,
+      "withheld_payment_id": null,
+      "drift_paise": 1
+    },
+    {
+      "bank_txn_id": "BNK0015",
+      "payment_ids": [
+        "PAY00071",
+        "PAY00072",
+        "PAY00073",
+        "PAY00075",
+        "PAY00076"
+      ],
+      "settlement_id": "STL0012",
+      "case": "partial_batch",
+      "credit_paise": 1909661,
+      "withheld_payment_id": "PAY00074",
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0017",
+      "payment_ids": [
+        "PAY00144",
+        "PAY00145",
+        "PAY00146",
+        "PAY00147",
+        "PAY00149",
+        "PAY00150",
+        "PAY00151"
+      ],
+      "settlement_id": "STL0024",
+      "case": "partial_batch",
+      "credit_paise": 3814022,
+      "withheld_payment_id": "PAY00148",
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0018",
+      "payment_ids": [
+        "PAY00176",
+        "PAY00177",
+        "PAY00178",
+        "PAY00179",
+        "PAY00180",
+        "PAY00181",
+        "PAY00182",
+        "PAY00183"
+      ],
+      "settlement_id": "STL0029",
+      "case": "clean_batch",
+      "credit_paise": 4190077,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0019",
+      "payment_ids": [
+        "PAY00024",
+        "PAY00025",
+        "PAY00026",
+        "PAY00027",
+        "PAY00028",
+        "PAY00029",
+        "PAY00030",
+        "PAY00031"
+      ],
+      "settlement_id": "STL0005",
+      "case": "missing_utr",
+      "credit_paise": 3727162,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0020",
+      "payment_ids": [
+        "PAY00107",
+        "PAY00108",
+        "PAY00109",
+        "PAY00110",
+        "PAY00111",
+        "PAY00112",
+        "PAY00113"
+      ],
+      "settlement_id": "STL0018",
+      "case": "clean_batch",
+      "credit_paise": 2456259,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0021",
+      "payment_ids": [
+        "PAY00077",
+        "PAY00078",
+        "PAY00079",
+        "PAY00080",
+        "PAY00081",
+        "PAY00082",
+        "PAY00083",
+        "PAY00084"
+      ],
+      "settlement_id": "STL0013",
+      "case": "weekend_delay",
+      "credit_paise": 3404435,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0024",
+      "payment_ids": [
+        "PAY00152",
+        "PAY00153",
+        "PAY00154",
+        "PAY00155",
+        "PAY00156",
+        "PAY00157",
+        "PAY00158"
+      ],
+      "settlement_id": "STL0025",
+      "case": "clean_batch",
+      "credit_paise": 2791979,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0025",
+      "payment_ids": [
+        "PAY00138",
+        "PAY00139",
+        "PAY00140",
+        "PAY00141",
+        "PAY00142",
+        "PAY00143"
+      ],
+      "settlement_id": "STL0023",
+      "case": "clean_batch",
+      "credit_paise": 3069533,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0026",
+      "payment_ids": [
+        "PAY00164",
+        "PAY00165",
+        "PAY00166",
+        "PAY00167",
+        "PAY00168",
+        "PAY00169",
+        "PAY00170"
+      ],
+      "settlement_id": "STL0027",
+      "case": "missing_utr",
+      "credit_paise": 4888134,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0027",
+      "payment_ids": [
+        "PAY00171",
+        "PAY00172",
+        "PAY00173",
+        "PAY00174",
+        "PAY00175"
+      ],
+      "settlement_id": "STL0028",
+      "case": "ambiguous_amount",
+      "credit_paise": 3856329,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0028",
+      "payment_ids": [
+        "PAY00008",
+        "PAY00009",
+        "PAY00010",
+        "PAY00011",
+        "PAY00012"
+      ],
+      "settlement_id": "STL0002",
+      "case": "clean_batch",
+      "credit_paise": 2700452,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0029",
+      "payment_ids": [
+        "PAY00100",
+        "PAY00101",
+        "PAY00102",
+        "PAY00103",
+        "PAY00104",
+        "PAY00105",
+        "PAY00106"
+      ],
+      "settlement_id": "STL0017",
+      "case": "ambiguous_amount",
+      "credit_paise": 3856329,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0030",
+      "payment_ids": [
+        "PAY00063",
+        "PAY00064",
+        "PAY00065",
+        "PAY00066",
+        "PAY00067",
+        "PAY00068",
+        "PAY00069",
+        "PAY00070"
+      ],
+      "settlement_id": "STL0011",
+      "case": "clean_batch",
+      "credit_paise": 3528580,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0031",
+      "payment_ids": [
+        "PAY00001",
+        "PAY00002",
+        "PAY00003",
+        "PAY00004",
+        "PAY00005",
+        "PAY00006",
+        "PAY00007"
+      ],
+      "settlement_id": "STL0001",
+      "case": "clean_batch",
+      "credit_paise": 3673094,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0032",
+      "payment_ids": [
+        "PAY00057",
+        "PAY00058",
+        "PAY00059",
+        "PAY00060",
+        "PAY00061",
+        "PAY00062"
+      ],
+      "settlement_id": "STL0010",
+      "case": "clean_batch",
+      "credit_paise": 2116033,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0033",
+      "payment_ids": [
+        "PAY00032",
+        "PAY00033",
+        "PAY00034",
+        "PAY00035",
+        "PAY00036"
+      ],
+      "settlement_id": "STL0006",
+      "case": "clean_batch",
+      "credit_paise": 2971308,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0034",
+      "payment_ids": [
+        "PAY00090",
+        "PAY00091",
+        "PAY00092",
+        "PAY00093",
+        "PAY00094"
+      ],
+      "settlement_id": "STL0015",
+      "case": "clean_batch",
+      "credit_paise": 2567588,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    }
+  ],
+  "unmatchable_bank": [
+    {
+      "bank_txn_id": "BNK0004",
+      "case": "foreign_credit"
+    },
+    {
+      "bank_txn_id": "BNK0016",
+      "case": "foreign_credit"
+    }
+  ],
+  "debit_rows": [
+    {
+      "bank_txn_id": "BNK0022",
+      "case": "chargeback_reversal"
+    },
+    {
+      "bank_txn_id": "BNK0023",
+      "case": "refund_debit"
+    },
+    {
+      "bank_txn_id": "BNK0035",
+      "case": "refund_debit"
+    }
+  ],
+  "unpaid_orders": [
+    {
+      "order_id": "ORD00191",
+      "case": "unpaid_order"
+    },
+    {
+      "order_id": "ORD00192",
+      "case": "unpaid_order"
+    },
+    {
+      "order_id": "ORD00193",
+      "case": "unpaid_order"
+    }
+  ]
+}
