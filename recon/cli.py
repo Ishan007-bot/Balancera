@@ -168,10 +168,31 @@ def cmd_run(args) -> int:
                      % len(p.proposed_payment_ids),
                      p.confidence, p.reasoning[:60]))
         abstained = sum(1 for p in proposals if p.abstain)
-        print("  abstention rate: %d/%d (%.0f%%)"
-              % (abstained, len(proposals),
-                 100 * abstained / len(proposals) if proposals else 0))
+        failed = sum(1 for p in proposals if p.error)
+        genuine_abstentions = abstained - failed
         llm_stats = proposer.stats()
+
+        if failed:
+            print()
+            print("  %d of %d calls FAILED. A failed call is not an abstention."
+                  % (failed, len(proposals)), file=sys.stderr)
+            for p in proposals:
+                if p.error:
+                    print("    %s: %s" % (p.bank_txn_id, p.error[:150]),
+                          file=sys.stderr)
+        if failed == len(proposals) and proposals:
+            print("  Every call failed, so there is nothing to measure and no",
+                  file=sys.stderr)
+            print("  report worth writing. Fix the provider error above, or",
+                  file=sys.stderr)
+            print("  use --no-llm for a clean deterministic run.",
+                  file=sys.stderr)
+            return 4
+
+        print("  abstention rate: %d/%d (%.0f%%)%s"
+              % (genuine_abstentions, len(proposals),
+                 100 * genuine_abstentions / len(proposals) if proposals else 0,
+                 "  [%d failed calls excluded]" % failed if failed else ""))
         print("  %s" % llm_stats)
         print()
 
@@ -205,6 +226,17 @@ def cmd_run(args) -> int:
         with open(run_dir / "rejections.jsonl", "w", encoding="utf-8") as fh:
             for v in gate.rejected:
                 fh.write(json.dumps(v.as_log_record(), sort_keys=True) + "\n")
+
+        gate_summary["proposals_made"] = len(proposals)
+        gate_summary["abstained"] = len(proposals) - len(actionable)
+        gate_summary["rejections"] = [
+            {"bank_txn_id": v.bank_txn_id, "failed_rule": str(v.failed_rule),
+             "reason": v.reason} for v in gate.rejected]
+        # Rupee value of what the gate refused. Finance panels respond to
+        # money, not F1 scores -- and these are synthetic funds, said plainly.
+        gate_summary["cost_of_being_wrong_paise"] = sum(
+            ds.bank_by_id[v.bank_txn_id].credit_paise for v in gate.rejected
+            if v.bank_txn_id in ds.bank_by_id)
 
         # Accepted proposals become real matches and are re-scored.
         for v in gate.accepted:
@@ -255,9 +287,73 @@ def cmd_run(args) -> int:
     }
     (run_dir / "baseline.json").write_text(
         json.dumps(baseline, indent=2), encoding="utf-8")
-    print("Baseline written to %s" % (run_dir / "baseline.json"))
 
+    # --- Exception classification and report ------------------------------
+    from .classify import classification_accuracy, classify_all
+    from .report import build_report, cash_position, git_commit
+
+    final_metrics = ablation[-1][1]
+    classified = classify_all(ds, result.unresolved, result.ambiguous,
+                              detected_unpaid)
+    accuracy = classification_accuracy(classified, truth)
+
+    print("Exception list")
+    print("=" * 72)
+    for c in classified:
+        print("  %-10s %-20s %s" % (c.exception.record_id, c.category,
+                                    c.reason[:56]))
+    print("  classification accuracy vs truth: %d/%d (%.0f%%)"
+          % (accuracy["correct"], accuracy["scored"],
+             100 * accuracy["accuracy"]))
+    print()
+
+    report_ctx = {
+        "git_commit": git_commit(),
+        "seed": truth.seed,
+        "hard_ratio": truth.hard_ratio,
+        "counts": {"orders": len(ds.orders), "payments": len(ds.payments),
+                   "bank": len(ds.bank), "credits": len(ds.credits),
+                   "debits": len(ds.debits),
+                   "settlements": len(ds.payments_by_settlement)},
+        "elapsed": elapsed,
+        "records": records,
+        "throughput": records / elapsed if elapsed else 0,
+        "metrics": final_metrics,
+        "baseline_metrics": metrics,
+        "ablation": [(lbl, met) for lbl, met, _ in ablation],
+        "exceptions": classified,
+        "classification_accuracy": accuracy,
+        "cash": cash_position(ds, result.matches),
+        "gate": gate_summary,
+        "llm_stats": llm_stats,
+        "llm_ran": bool(llm_stats),
+        "llm_description": ("%s / %s" % (llm_stats["provider"],
+                                         llm_stats["model"]))
+                           if llm_stats else "not used (--no-llm)",
+        "sweep": _load_sweep(args),
+    }
+    (run_dir / "report.md").write_text(build_report(report_ctx),
+                                       encoding="utf-8")
+    print("Artifacts")
+    print("=" * 72)
+    print("  %s" % (run_dir / "baseline.json"))
+    print("  %s" % (run_dir / "report.md"))
+    if gate_summary:
+        print("  %s" % (run_dir / "rejections.jsonl"))
+        print("  %s" % (run_dir / "llm_calls.jsonl"))
     return 0
+
+
+def _load_sweep(args):
+    """Reuse a sweep.json sitting beside the run, if one was produced."""
+    import json
+    path = Path(args.out) / "sweep.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+    return None
 
 
 def cmd_selftest(args) -> int:
@@ -293,6 +389,67 @@ def cmd_selftest(args) -> int:
               file=sys.stderr)
         return 1
     print("\nSELF-TEST PASSED: every injected corruption was rejected")
+    return 0
+
+
+def cmd_sweep(args) -> int:
+    """Measure the pipeline at several difficulty mixes.
+
+    A single match rate at one difficulty is easy to over-read. Three points
+    show whether the number reflects the system or the dataset.
+    """
+    import json
+    import tempfile
+
+    from .evaluate import evaluate
+    from .generate import generate
+    from .ingest import load_dataset, load_truth
+    from .match_deterministic import run_deterministic
+
+    ratios = [float(r) for r in args.ratios.split(",")]
+    rows = []
+
+    print("Difficulty sweep")
+    print("=" * 72)
+    print("  %-11s %-15s %11s %10s %7s"
+          % ("hard_ratio", "clean batches", "auto-match", "precision", "forced"))
+
+    for ratio in ratios:
+        with tempfile.TemporaryDirectory() as tmp:
+            generate(args.seed, ratio, tmp)
+            ds = load_dataset(tmp)
+            truth = load_truth(tmp)
+            paid = {p.order_id for p in ds.payments}
+            unpaid = {o.order_id for o in ds.orders if o.order_id not in paid}
+            result = run_deterministic(ds, stages=3)
+            met = evaluate(result.matches, truth, ds, unpaid)
+
+            cases = {}
+            for tm in truth.matches:
+                cases[str(tm.case)] = cases.get(str(tm.case), 0) + 1
+            clean = cases.get("clean_batch", 0)
+            total = sum(cases.values())
+
+            rows.append({
+                "hard_ratio": ratio, "batches": total, "clean_batches": clean,
+                "auto_match_rate": met.auto_match_rate,
+                "precision": met.precision, "recall": met.recall,
+                "forced_match_errors": met.forced_match_errors,
+                "true_positives": met.true_positives,
+                "matchable_credits": met.matchable_credits,
+            })
+            print("  %-11.1f %-15s %10.1f%% %9.1f%% %7d"
+                  % (ratio, "%d / %d" % (clean, total),
+                     100 * met.auto_match_rate, 100 * met.precision,
+                     met.forced_match_errors))
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "sweep.json").write_text(json.dumps(rows, indent=2),
+                                    encoding="utf-8")
+    print()
+    print("  written to %s" % (out / "sweep.json"))
+    print("  the next `run` will include this table in its report")
     return 0
 
 
@@ -341,7 +498,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("sweep", help="run at several difficulty ratios")
     s.add_argument("data_dir", nargs="?", default="data/")
     s.add_argument("--ratios", default="0.2,0.4,0.6")
-    s.set_defaults(func=cmd_not_yet("Phase 5"))
+    s.add_argument("--seed", type=int, default=42)
+    s.add_argument("--out", default="runs/")
+    s.set_defaults(func=cmd_sweep)
 
     return p
 

@@ -23,7 +23,9 @@ from dataclasses import dataclass
 #: provider name -> (default model, env var holding the key)
 PROVIDERS = {
     "anthropic": ("claude-sonnet-5", "ANTHROPIC_API_KEY"),
-    "groq": ("llama-3.3-70b-versatile", "GROQ_API_KEY"),
+    # Groq rotates model availability faster than most providers. `--model`
+    # overrides this, and a retired id now reports what the key can use.
+    "groq": ("openai/gpt-oss-120b", "GROQ_API_KEY"),
     "gemini": ("gemini-2.0-flash", "GEMINI_API_KEY"),
 }
 
@@ -31,7 +33,9 @@ PROVIDERS = {
 #: so the cost line stays meaningful even when the bill is zero.
 PRICING = {
     "claude-sonnet-5": (2.00, 10.00),
-    "llama-3.3-70b-versatile": (0.59, 0.79),
+    "openai/gpt-oss-120b": (0.15, 0.75),
+    "openai/gpt-oss-20b": (0.10, 0.50),
+    "qwen/qwen3.8-27b": (0.10, 0.30),
     "gemini-2.0-flash": (0.10, 0.40),
 }
 
@@ -137,17 +141,38 @@ class GroqProvider(Provider):
                 base_url="https://api.groq.com/openai/v1")
         return self._client
 
+    def list_models(self) -> list[str]:
+        """Model ids this key can actually use."""
+        try:
+            return sorted(m.id for m in self.client.models.list().data)
+        except Exception:  # noqa: BLE001 - diagnostics must not raise
+            return []
+
     def complete(self, system, user, temperature, max_tokens):
-        response = self.client.chat.completions.create(
-            model=self.model, max_tokens=max_tokens, temperature=temperature,
-            messages=[{"role": "system", "content": system},
-                      {"role": "user", "content": user}],
-            # Ask for JSON at the API level as well as in the prompt. The
-            # parser still strips fences defensively -- belt and braces,
-            # because a malformed reply must degrade to an abstain, not a
-            # crash.
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model, max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": user}],
+                # Ask for JSON at the API level as well as in the prompt. The
+                # parser still strips fences defensively -- belt and braces,
+                # because a malformed reply must degrade to an abstain, not a
+                # crash.
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Providers retire model ids without warning. A bare
+            # "model_not_found" leaves the user guessing, so name what is
+            # actually available instead.
+            if "model_not_found" in str(exc) or "does not exist" in str(exc):
+                available = self.list_models()
+                raise RuntimeError(
+                    "model %r is not available on this Groq key. Available: "
+                    "%s. Pass --model <id> to choose one."
+                    % (self.model, ", ".join(available[:12]) or "(none listed)")
+                ) from exc
+            raise
         usage = getattr(response, "usage", None)
         return Completion(
             text=response.choices[0].message.content or "",

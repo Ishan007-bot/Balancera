@@ -241,6 +241,7 @@ class LLMProposer:
             from .providers import get_provider
             self._provider = get_provider(provider, model=model)
         self.calls = 0
+        self.errors = 0
         self.cache_hits = 0
         self.input_tokens = 0
         self.output_tokens = 0
@@ -379,8 +380,16 @@ class LLMProposer:
                 text, meta = self._call(SYSTEM_PROMPT, user, txn.txn_id,
                                         sorted(cs.payment_ids), iteration)
             except Exception as exc:  # noqa: BLE001 - any failure is an abstain
+                # A failed call must never be indistinguishable from a model
+                # that chose to abstain: one is a broken run, the other is a
+                # result. Record the cause in `reasoning` too, so it surfaces
+                # wherever the proposal is displayed.
+                detail = "%s: %s" % (type(exc).__name__, exc)
+                self.errors += 1
                 return Proposal(bank_txn_id=txn.txn_id, abstain=True,
-                                error="llm call failed: %s" % exc,
+                                error="llm call failed: %s" % detail,
+                                reasoning="LLM CALL FAILED (not an abstention) "
+                                          "-- %s" % detail[:200],
                                 iterations=iteration)
 
             proposal = parse_response(text, txn.txn_id)
@@ -410,6 +419,7 @@ class LLMProposer:
     def stats(self) -> dict:
         return {
             "llm_calls": self.calls,
+            "failed_calls": self.errors,
             "cache_hits": self.cache_hits,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
