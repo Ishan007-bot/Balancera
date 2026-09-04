@@ -1,0 +1,13 @@
+[project]
+name = "recon-agent"
+version = "0.1.0"
+description = "Multi-source reconciliation agent: LLM proposes, deterministic code disposes"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

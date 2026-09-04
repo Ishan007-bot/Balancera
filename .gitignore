@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Generated artifacts
+data/*
+!data/sample/
+runs/*
+!runs/.gitkeep
