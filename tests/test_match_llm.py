@@ -354,3 +354,52 @@ def test_unavailable_provider_reports_why_not():
     ok, why = get_provider("groq", api_key=None).available()
     if not ok:
         assert "GROQ_API_KEY" in why or "openai package" in why
+
+
+class TestFailedCallsAreNotAbstentions:
+    """Regression: a failing API call returned abstain with an empty reason,
+    so a broken run was indistinguishable from a cautious model. Abstention
+    rate is a reported metric -- it must never count failures."""
+
+    def test_failure_is_flagged_in_reasoning_not_just_error(self, world, tmp_path):
+        ds, _, result, residual = world
+
+        class Failing:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    raise RuntimeError("401 Invalid API Key")
+
+        prop = make(tmp_path, client=Failing())
+        p = prop.propose(ds, residual[1], result.claimed_payment_ids)
+        assert p.error, "failure not recorded"
+        assert "FAILED" in p.reasoning, \
+            "a failed call must be visible wherever the proposal is displayed"
+        assert "Invalid API Key" in p.reasoning
+
+    def test_failed_calls_are_counted_separately(self, world, tmp_path):
+        ds, _, result, residual = world
+
+        class Failing:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    raise RuntimeError("network down")
+
+        prop = make(tmp_path, client=Failing())
+        proposals = [prop.propose(ds, t, result.claimed_payment_ids)
+                     for t in residual]
+        # A credit with no candidates in the window abstains before any call
+        # is attempted, so failures count the calls actually tried -- not
+        # every residual credit.
+        attempted = sum(1 for p in proposals if p.error)
+        assert prop.stats()["failed_calls"] == attempted
+        assert attempted > 0
+        assert prop.stats()["llm_calls"] == 0, "a failed call is not a call"
+
+    def test_a_genuine_abstention_has_no_error(self, world, tmp_path):
+        ds, _, result, residual = world
+        prop = make(tmp_path, client=MockClient(behaviour=group_aware_solver()))
+        p = prop.propose(ds, residual[0], result.claimed_payment_ids)
+        assert p.abstain
+        assert p.error is None, "a real abstention must not look like a failure"
