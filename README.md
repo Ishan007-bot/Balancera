@@ -1,7 +1,5 @@
 # Multi-source reconciliation agent
 
-**Razorpay AI Buildathon — Track 04, AI Finance Controller**
-
 When a customer pays an online merchant, the money does not go straight to the
 merchant's bank. It goes to a payment gateway, which holds it, batches it with
 other payments, and pushes a single lump sum to the bank one to three days
