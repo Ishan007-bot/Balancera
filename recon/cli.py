@@ -54,6 +54,7 @@ def cmd_run(args) -> int:
     from .evaluate import evaluate, format_metrics_table, per_case_breakdown
     from .ingest import load_dataset, load_truth
     from .match_deterministic import run_deterministic
+    from .models import Match
 
     started = time.perf_counter()
     ds = load_dataset(args.data_dir)
@@ -125,6 +126,7 @@ def cmd_run(args) -> int:
     # that decides which of them become matches lands in Phase 4. Nothing the
     # model says has been allowed to affect the metrics above.
     llm_stats = None
+    gate_summary = None
     proposals = []
     if not args.no_llm:
         from .match_llm import LLMProposer
@@ -172,8 +174,56 @@ def cmd_run(args) -> int:
         llm_stats = proposer.stats()
         print("  %s" % llm_stats)
         print()
-        print("note: the verification gate lands in Phase 4; no proposal has")
-        print("      been accepted, so the metrics above are unchanged.")
+
+        # --- Verification gate --------------------------------------------
+        # Nothing the model proposed is a match until this passes it. The
+        # gate recomputes every amount from source and knows nothing about
+        # where the proposal came from.
+        from .verify import verify_all
+
+        actionable = [p for p in proposals if p.is_actionable()]
+        gate = verify_all(actionable, ds, result.claimed_payment_ids,
+                          confidence_threshold=args.confidence_threshold)
+        gate_summary = gate.summary()
+
+        print("Verification gate")
+        print("=" * 72)
+        print("  proposals made      %3d" % len(proposals))
+        print("  ...abstained        %3d (never reached the gate)"
+              % (len(proposals) - len(actionable)))
+        print("  ...verified         %3d" % gate_summary["proposals_verified"])
+        print("  accepted            %3d" % gate_summary["accepted"])
+        print("  rejected            %3d" % gate_summary["rejected"])
+        for rule, count in gate_summary["rejections_by_rule"].items():
+            print("      %-22s %2d" % (rule, count))
+        for v in gate.rejected:
+            print("  REJECTED %s: %s" % (v.bank_txn_id, v.reason[:70]))
+        print()
+
+        # The rejection log is a deliverable: it is the evidence that the
+        # safety layer does real work rather than passing everything through.
+        with open(run_dir / "rejections.jsonl", "w", encoding="utf-8") as fh:
+            for v in gate.rejected:
+                fh.write(json.dumps(v.as_log_record(), sort_keys=True) + "\n")
+
+        # Accepted proposals become real matches and are re-scored.
+        for v in gate.accepted:
+            result.matches.append(Match(
+                bank_txn_id=v.bank_txn_id, payment_ids=v.payment_ids,
+                stage="llm_verified",
+                confidence=v.detail.get("confidence", 0.0),
+                reasoning=v.reason))
+            result.unresolved.pop(v.bank_txn_id, None)
+
+        final_metrics = evaluate(result.matches, truth, ds, detected_unpaid)
+        ablation.append(("Stages 1-5 (+ LLM, verified)", final_metrics, result))
+
+        print(format_metrics_table(final_metrics,
+                                   "Final (deterministic + verified LLM)"))
+        print()
+        print("  delta vs baseline: auto-match %+.1f pp, precision %+.1f pp"
+              % (100 * (final_metrics.auto_match_rate - metrics.auto_match_rate),
+                 100 * (final_metrics.precision - metrics.precision)))
         print()
 
     # Persist the baseline. SPEC is explicit that these numbers must not be
@@ -193,6 +243,7 @@ def cmd_run(args) -> int:
         "unresolved": result.unresolved,
         "ambiguous": result.ambiguous,
         "llm": llm_stats,
+        "gate": gate_summary,
         "proposals": [
             {"bank_txn_id": pr.bank_txn_id,
              "proposed_payment_ids": pr.proposed_payment_ids,
@@ -206,6 +257,42 @@ def cmd_run(args) -> int:
         json.dumps(baseline, indent=2), encoding="utf-8")
     print("Baseline written to %s" % (run_dir / "baseline.json"))
 
+    return 0
+
+
+def cmd_selftest(args) -> int:
+    """Prove the verification gate rejects deliberately corrupted matches.
+
+    The rejection log shows the gate rejected something; this shows it rejects
+    what it *should*, on demand, without anyone having to trust that the
+    logged rejections were representative.
+    """
+    import json
+
+    from .ingest import load_dataset
+    from .match_deterministic import run_deterministic
+    from .selftest import format_selftest, run_selftest
+
+    ds = load_dataset(args.data_dir)
+    result = run_deterministic(ds, stages=3)
+    results, all_caught = run_selftest(ds, result.matches,
+                                       result.claimed_payment_ids)
+    if not results:
+        print("no multi-payment matches available to corrupt", file=sys.stderr)
+        return 1
+
+    print(format_selftest(results))
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        print("\nwritten to %s" % out)
+
+    if not all_caught:
+        print("\nSELF-TEST FAILED: the gate missed at least one corruption",
+              file=sys.stderr)
+        return 1
+    print("\nSELF-TEST PASSED: every injected corruption was rejected")
     return 0
 
 
@@ -239,6 +326,12 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--confidence-threshold", type=float, default=0.7)
     r.add_argument("--out", default="runs/")
     r.set_defaults(func=cmd_run)
+
+    st = sub.add_parser("selftest",
+                        help="prove the verification gate rejects corrupted matches")
+    st.add_argument("data_dir", nargs="?", default="data/")
+    st.add_argument("--out", default=None, help="write results as JSON")
+    st.set_defaults(func=cmd_selftest)
 
     s = sub.add_parser("sweep", help="run at several difficulty ratios")
     s.add_argument("data_dir", nargs="?", default="data/")
