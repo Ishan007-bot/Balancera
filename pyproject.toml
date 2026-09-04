@@ -6,7 +6,10 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+# The SPEC default. Only one of these is needed, and none for --no-llm.
 llm = ["anthropic>=0.40"]
+groq = ["openai>=1.0"]          # Groq speaks the OpenAI-compatible API
+gemini = ["google-generativeai>=0.8"]
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]

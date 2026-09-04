@@ -13,8 +13,8 @@ from recon.generate import generate
 from recon.ingest import load_dataset, load_truth
 from recon.match_deterministic import run_deterministic
 from recon.match_llm import (
-    ACTIONS, LLMProposer, Proposal, build_prompt, parse_response, prompt_hash,
-    strip_fences, SYSTEM_PROMPT,
+    ACTIONS, DEFAULT_PROVIDER, LLMProposer, Proposal, build_prompt,
+    parse_response, prompt_hash, strip_fences, SYSTEM_PROMPT,
 )
 from recon.retrieve import retrieve
 
@@ -294,8 +294,23 @@ class TestCachingAndAudit:
         stats = prop.stats()
         assert stats["llm_calls"] > 0
         assert stats["input_tokens"] > 0
-        assert stats["estimated_cost_usd"] > 0
-        assert stats["model"] == "claude-sonnet-5"
+        assert stats["output_tokens"] > 0
+        assert stats["model"]  # whichever model/provider ran
+        assert stats["provider"] == "mock"
+        # The mock model has no price entry, so cost is legitimately zero.
+        # Cost accounting itself is checked against a real priced model below.
+        assert stats["estimated_cost_usd"] == 0.0
+
+    def test_cost_is_computed_from_provider_pricing(self):
+        from recon.providers import PRICING
+
+        prop = LLMProposer(cache_dir="runs/cache", client=MockClient())
+        prop._client = None
+        from recon.providers import get_provider
+        prop._provider = get_provider("anthropic")
+        in_rate, out_rate = PRICING["claude-sonnet-5"]
+        expected = round(1e6 / 1e6 * in_rate + 1e6 / 1e6 * out_rate, 6)
+        assert prop._cost(1_000_000, 1_000_000) == expected
 
 
 class TestDangerousModels:
@@ -319,8 +334,23 @@ class TestDangerousModels:
 
 
 def test_module_imports_without_the_sdk():
-    """--no-llm must work on a machine with no anthropic package installed."""
+    """--no-llm must work on a machine with no provider SDK installed."""
     import importlib
     import recon.match_llm as m
     importlib.reload(m)
-    assert m.MODEL == "claude-sonnet-5"
+    assert m.DEFAULT_PROVIDER == "anthropic"
+
+
+def test_provider_registry_lists_the_free_options():
+    from recon.providers import PROVIDERS
+    assert set(PROVIDERS) == {"anthropic", "groq", "gemini"}
+    for name, (model, env_var) in PROVIDERS.items():
+        assert model and env_var.endswith("_API_KEY")
+
+
+def test_unavailable_provider_reports_why_not():
+    """A missing key or SDK must produce a clear message, not a crash."""
+    from recon.providers import get_provider
+    ok, why = get_provider("groq", api_key=None).available()
+    if not ok:
+        assert "GROQ_API_KEY" in why or "openai package" in why

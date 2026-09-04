@@ -133,29 +133,29 @@ def cmd_run(args) -> int:
 
         residual = [t for t in ds.credits
                     if t.txn_id not in result.matched_txn_ids]
-        proposer = LLMProposer(cache_dir=Path(args.out) / "cache",
-                               log_path=run_dir / "llm_calls.jsonl")
+        from .providers import get_provider
+
         print("LLM proposal layer")
         print("=" * 72)
 
-        # Fail loudly if the model is unreachable. Degrading to 100%
-        # abstention silently would look like a cautious model rather than a
-        # missing dependency, and that misreads as a result.
-        import os
-        try:
-            import anthropic  # noqa: F401
-            sdk_ok = True
-        except ImportError:
-            sdk_ok = False
-        if not sdk_ok or not (os.environ.get("ANTHROPIC_API_KEY")
-                              or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-            print("  WARNING: %s."
-                  % ("the anthropic package is not installed" if not sdk_ok
-                     else "no ANTHROPIC_API_KEY is set"))
-            print("  Every proposal below will abstain because the model could")
-            print("  not be reached. This is NOT a measurement of abstention.")
-            print("  Use --no-llm for a clean deterministic run.")
-            print()
+        # Preflight. An unreachable model would abstain on everything, which
+        # looks like a cautious model rather than a missing key -- so refuse
+        # to run rather than emit a number that reads as a measurement.
+        provider = get_provider(args.provider, model=args.model)
+        usable, why = provider.available()
+        if not usable:
+            print("  cannot reach the %s provider: %s" % (args.provider, why),
+                  file=sys.stderr)
+            print("  Every proposal would abstain, which is NOT a measurement",
+                  file=sys.stderr)
+            print("  of abstention. Fix the above, or use --no-llm.",
+                  file=sys.stderr)
+            return 3
+
+        print("  provider: %s   model: %s" % (args.provider, provider.model))
+        proposer = LLMProposer(cache_dir=Path(args.out) / "cache",
+                               log_path=run_dir / "llm_calls.jsonl",
+                               provider=args.provider, model=args.model)
 
         print("  %d residual credits after the deterministic stages"
               % len(residual))
@@ -324,6 +324,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("data_dir", nargs="?", default="data/")
     r.add_argument("--no-llm", action="store_true")
     r.add_argument("--confidence-threshold", type=float, default=0.7)
+    r.add_argument("--provider", default="anthropic",
+                   choices=["anthropic", "groq", "gemini"],
+                   help="LLM provider (default: anthropic, per SPEC)")
+    r.add_argument("--model", default=None,
+                   help="override the provider's default model")
     r.add_argument("--out", default="runs/")
     r.set_defaults(func=cmd_run)
 

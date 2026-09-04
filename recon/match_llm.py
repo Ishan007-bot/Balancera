@@ -29,15 +29,10 @@ from .models import BankTxn
 from .money import format_paise
 from .retrieve import DEFAULT_K, CandidateSet, retrieve
 
-MODEL = "claude-sonnet-5"
+DEFAULT_PROVIDER = "anthropic"  # the SPEC default; see providers.py
 TEMPERATURE = 0.0
 MAX_TOKENS = 1024
 MAX_ITERATIONS = 3  # bound on the agentic loop, per credit
-
-# Published rates for claude-sonnet-5, USD per million tokens. Used only to
-# estimate the cost line in the report.
-INPUT_COST_PER_MTOK = 2.00
-OUTPUT_COST_PER_MTOK = 10.00
 
 ACTIONS = ("propose_match", "widen_date_window", "request_more_candidates",
            "abstain")
@@ -157,12 +152,17 @@ def build_prompt(cs: CandidateSet, ds: Dataset, iteration: int = 1,
     return "\n".join(lines)
 
 
-def prompt_hash(system: str, user: str) -> str:
+def prompt_hash(system: str, user: str, model: str = "") -> str:
+    """Cache key for one prompt.
+
+    Includes the model: a response from one model must never be served for
+    another, or a cached run would silently mix providers.
+    """
     h = hashlib.sha256()
     h.update(system.encode("utf-8"))
     h.update(b"\x00")
     h.update(user.encode("utf-8"))
-    h.update(("|%s|%s" % (MODEL, TEMPERATURE)).encode("utf-8"))
+    h.update(("|%s|%s" % (model, TEMPERATURE)).encode("utf-8"))
     return h.hexdigest()
 
 
@@ -226,7 +226,8 @@ class LLMProposer:
 
     def __init__(self, cache_dir="runs/cache", log_path=None,
                  k: int = DEFAULT_K, max_iterations: int = MAX_ITERATIONS,
-                 client=None):
+                 client=None, provider: str = DEFAULT_PROVIDER,
+                 model: str | None = None):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.log_path = Path(log_path) if log_path else None
@@ -234,31 +235,47 @@ class LLMProposer:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.k = k
         self.max_iterations = max_iterations
-        self._client = client
+        self._client = client  # injected by tests; bypasses the provider
+        self._provider = None
+        if client is None:
+            from .providers import get_provider
+            self._provider = get_provider(provider, model=model)
         self.calls = 0
         self.cache_hits = 0
         self.input_tokens = 0
         self.output_tokens = 0
 
-    # -- client ------------------------------------------------------------
+    # -- provider ----------------------------------------------------------
 
     @property
-    def client(self):
-        """Import and construct lazily.
+    def model(self) -> str:
+        """The model actually in use -- provider default unless overridden."""
+        if self._client is not None:
+            return getattr(self._client, "model", "mock")
+        return self._provider.model if self._provider else "unknown"
 
-        Deliberate: the module must import cleanly with no SDK installed and
-        no API key present, because the offline path is a first-class
-        requirement rather than a fallback.
+    def _complete(self, system: str, user: str):
+        """Send one prompt. Routes to the injected test client if present.
+
+        Tests inject a client with a ``.messages.create`` shape; production
+        goes through a Provider. Keeping both paths here means the tested code
+        is the real code, with only the transport swapped.
         """
-        if self._client is None:
-            try:
-                import anthropic
-            except ImportError as exc:  # pragma: no cover - env dependent
-                raise RuntimeError(
-                    "the anthropic package is not installed; run with "
-                    "--no-llm for the deterministic pipeline") from exc
-            self._client = anthropic.Anthropic()
-        return self._client
+        if self._client is not None:
+            response = self._client.messages.create(
+                model=self.model, max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE, system=system,
+                messages=[{"role": "user", "content": user}])
+            text = "".join(b.text for b in response.content
+                           if getattr(b, "type", "") == "text")
+            usage = getattr(response, "usage", None)
+            from .providers import Completion
+            return Completion(
+                text=text,
+                input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
+                output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
+                model=self.model)
+        return self._provider.complete(system, user, TEMPERATURE, MAX_TOKENS)
 
     # -- cache -------------------------------------------------------------
 
@@ -291,7 +308,7 @@ class LLMProposer:
     def _call(self, system: str, user: str, txn_id: str,
               candidates: list[str], iteration: int) -> tuple[str, dict]:
         """One model call, cache-first. Returns (raw_text, metadata)."""
-        digest = prompt_hash(system, user)
+        digest = prompt_hash(system, user, self.model)
         cached = self._cache_get(digest)
         if cached is not None:
             self.cache_hits += 1
@@ -304,27 +321,19 @@ class LLMProposer:
             return cached["text"], meta
 
         start = time.perf_counter()
-        response = self.client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
+        completion = self._complete(system, user)
         latency_ms = int((time.perf_counter() - start) * 1000)
 
-        text = "".join(block.text for block in response.content
-                       if getattr(block, "type", "") == "text")
-        usage = getattr(response, "usage", None)
-        in_tok = getattr(usage, "input_tokens", 0) if usage else 0
-        out_tok = getattr(usage, "output_tokens", 0) if usage else 0
+        text = completion.text
+        in_tok = completion.input_tokens
+        out_tok = completion.output_tokens
 
         self.calls += 1
         self.input_tokens += in_tok
         self.output_tokens += out_tok
 
         self._cache_put(digest, {"text": text, "input_tokens": in_tok,
-                                 "output_tokens": out_tok, "model": MODEL})
+                                 "output_tokens": out_tok, "model": self.model})
         meta = {"prompt_hash": digest, "cached": False,
                 "latency_ms": latency_ms, "input_tokens": in_tok,
                 "output_tokens": out_tok,
@@ -333,10 +342,11 @@ class LLMProposer:
                    "candidates": candidates, "raw_response": text, **meta})
         return text, meta
 
-    @staticmethod
-    def _cost(input_tokens: int, output_tokens: int) -> float:
-        return round(input_tokens / 1e6 * INPUT_COST_PER_MTOK
-                     + output_tokens / 1e6 * OUTPUT_COST_PER_MTOK, 6)
+    def _cost(self, input_tokens: int, output_tokens: int) -> float:
+        from .providers import PRICING
+        in_rate, out_rate = PRICING.get(self.model, (0.0, 0.0))
+        return round(input_tokens / 1e6 * in_rate
+                     + output_tokens / 1e6 * out_rate, 6)
 
     # -- the agentic loop --------------------------------------------------
 
@@ -405,5 +415,6 @@ class LLMProposer:
             "output_tokens": self.output_tokens,
             "estimated_cost_usd": self._cost(self.input_tokens,
                                              self.output_tokens),
-            "model": MODEL,
+            "model": self.model,
+            "provider": (self._provider.name if self._provider else "mock"),
         }
