@@ -117,10 +117,67 @@ def cmd_run(args) -> int:
           % (records, elapsed, records / elapsed if elapsed else 0))
     print()
 
-    # Persist the baseline. SPEC is explicit that these numbers must not be
-    # lost or overwritten when the LLM layer lands.
     run_dir = Path(args.out) / datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- LLM proposal layer -----------------------------------------------
+    # Proposals are collected here but NOT accepted: the verification gate
+    # that decides which of them become matches lands in Phase 4. Nothing the
+    # model says has been allowed to affect the metrics above.
+    llm_stats = None
+    proposals = []
+    if not args.no_llm:
+        from .match_llm import LLMProposer
+
+        residual = [t for t in ds.credits
+                    if t.txn_id not in result.matched_txn_ids]
+        proposer = LLMProposer(cache_dir=Path(args.out) / "cache",
+                               log_path=run_dir / "llm_calls.jsonl")
+        print("LLM proposal layer")
+        print("=" * 72)
+
+        # Fail loudly if the model is unreachable. Degrading to 100%
+        # abstention silently would look like a cautious model rather than a
+        # missing dependency, and that misreads as a result.
+        import os
+        try:
+            import anthropic  # noqa: F401
+            sdk_ok = True
+        except ImportError:
+            sdk_ok = False
+        if not sdk_ok or not (os.environ.get("ANTHROPIC_API_KEY")
+                              or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+            print("  WARNING: %s."
+                  % ("the anthropic package is not installed" if not sdk_ok
+                     else "no ANTHROPIC_API_KEY is set"))
+            print("  Every proposal below will abstain because the model could")
+            print("  not be reached. This is NOT a measurement of abstention.")
+            print("  Use --no-llm for a clean deterministic run.")
+            print()
+
+        print("  %d residual credits after the deterministic stages"
+              % len(residual))
+        for txn in residual:
+            p = proposer.propose(ds, txn, result.claimed_payment_ids)
+            proposals.append(p)
+            print("  %-9s %-22s conf=%.2f  %s"
+                  % (txn.txn_id,
+                     "ABSTAIN" if p.abstain else "propose %d payments"
+                     % len(p.proposed_payment_ids),
+                     p.confidence, p.reasoning[:60]))
+        abstained = sum(1 for p in proposals if p.abstain)
+        print("  abstention rate: %d/%d (%.0f%%)"
+              % (abstained, len(proposals),
+                 100 * abstained / len(proposals) if proposals else 0))
+        llm_stats = proposer.stats()
+        print("  %s" % llm_stats)
+        print()
+        print("note: the verification gate lands in Phase 4; no proposal has")
+        print("      been accepted, so the metrics above are unchanged.")
+        print()
+
+    # Persist the baseline. SPEC is explicit that these numbers must not be
+    # lost or overwritten when the LLM layer lands.
     baseline = {
         "generated_from": str(args.data_dir),
         "seed": truth.seed,
@@ -135,14 +192,20 @@ def cmd_run(args) -> int:
         "stage_counts": result.stage_counts,
         "unresolved": result.unresolved,
         "ambiguous": result.ambiguous,
+        "llm": llm_stats,
+        "proposals": [
+            {"bank_txn_id": pr.bank_txn_id,
+             "proposed_payment_ids": pr.proposed_payment_ids,
+             "confidence": pr.confidence, "abstain": pr.abstain,
+             "action": pr.action, "iterations": pr.iterations,
+             "reasoning": pr.reasoning, "error": pr.error}
+            for pr in proposals
+        ],
     }
     (run_dir / "baseline.json").write_text(
         json.dumps(baseline, indent=2), encoding="utf-8")
     print("Baseline written to %s" % (run_dir / "baseline.json"))
 
-    if not args.no_llm:
-        print()
-        print("note: LLM layer lands in Phase 3; this run is deterministic only.")
     return 0
 
 
