@@ -208,6 +208,13 @@ def build_plan(seed: int, hard_ratio: float,
             narration_utr = _mangle(utr, rng)
         elif case is Case.MISSING_UTR:
             narration_utr = ""
+        elif case is Case.AMBIGUOUS_AMOUNT:
+            # The tie is by amount and date, so it only bites once no stronger
+            # signal exists. With a clean reference in the narration, stage 1
+            # resolves these before stage 2 ever sees the ambiguity and the
+            # case proves nothing. Withholding the reference is what makes the
+            # tie reachable -- which is the entire point of generating it.
+            narration_utr = ""
 
         batch = PlannedBatch(
             settlement_id=settlement_id, case=case, payments=payments,

@@ -121,6 +121,20 @@ class TestStageBehaviour:
                 "stage 2 guessed on a genuine tie"
             assert len(result.ambiguous.get(txn_id, [])) >= 2
 
+    def test_the_tie_actually_bites_in_the_full_pipeline(self, ds):
+        """Regression: the ambiguous pair originally carried clean UTRs, so
+        stage 1 resolved both by reference and the tie was never reached. A
+        case that cannot trigger is not a case."""
+        dataset, truth = ds
+        result = run_deterministic(dataset, stages=3)
+        amb_txns = {m.bank_txn_id for m in truth.matches
+                    if str(m.case) == "ambiguous_amount"}
+        for txn_id in amb_txns:
+            assert txn_id not in result.matched_txn_ids, \
+                "%s was resolved before the tie could bite" % txn_id
+            assert len(result.ambiguous.get(txn_id, [])) >= 2, \
+                "%s unresolved but recorded no competing candidates" % txn_id
+
     def test_stage3_resolves_partial_batches(self, ds):
         dataset, truth = ds
         result = run_deterministic(dataset, stages=3)

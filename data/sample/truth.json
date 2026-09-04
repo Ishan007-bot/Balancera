@@ -365,6 +365,23 @@
     {
       "bank_txn_id": "BNK0026",
       "payment_ids": [
+        "PAY00100",
+        "PAY00101",
+        "PAY00102",
+        "PAY00103",
+        "PAY00104",
+        "PAY00105",
+        "PAY00106"
+      ],
+      "settlement_id": "STL0017",
+      "case": "ambiguous_amount",
+      "credit_paise": 3856329,
+      "withheld_payment_id": null,
+      "drift_paise": 0
+    },
+    {
+      "bank_txn_id": "BNK0027",
+      "payment_ids": [
         "PAY00164",
         "PAY00165",
         "PAY00166",
@@ -380,7 +397,7 @@
       "drift_paise": 0
     },
     {
-      "bank_txn_id": "BNK0027",
+      "bank_txn_id": "BNK0028",
       "payment_ids": [
         "PAY00171",
         "PAY00172",
@@ -395,7 +412,7 @@
       "drift_paise": 0
     },
     {
-      "bank_txn_id": "BNK0028",
+      "bank_txn_id": "BNK0029",
       "payment_ids": [
         "PAY00008",
         "PAY00009",
@@ -406,23 +423,6 @@
       "settlement_id": "STL0002",
       "case": "clean_batch",
       "credit_paise": 2700452,
-      "withheld_payment_id": null,
-      "drift_paise": 0
-    },
-    {
-      "bank_txn_id": "BNK0029",
-      "payment_ids": [
-        "PAY00100",
-        "PAY00101",
-        "PAY00102",
-        "PAY00103",
-        "PAY00104",
-        "PAY00105",
-        "PAY00106"
-      ],
-      "settlement_id": "STL0017",
-      "case": "ambiguous_amount",
-      "credit_paise": 3856329,
       "withheld_payment_id": null,
       "drift_paise": 0
     },
