@@ -35,18 +35,33 @@ def step(title: str) -> None:
 
 
 def demo(with_llm: bool = False) -> int:
-    """Generate, validate, then reconcile -- end to end from a clean clone."""
-    step("1/3  Generate synthetic data and ground truth")
+    """Generate, validate, sweep, self-test, reconcile -- end to end.
+
+    The sweep and self-test run *before* the reconciliation, because the
+    report reads sweep.json when it renders section 4. Running them after
+    would leave a reviewer following the quickstart with an empty table.
+    """
+    step("1/5  Generate synthetic data and ground truth")
     rc = sh(PY, "-m", "recon.cli", "generate", "--seed", "42", "--out", "data/")
     if rc:
         return rc
 
-    step("2/3  Validate ground-truth self-consistency")
+    step("2/5  Validate ground-truth self-consistency")
     rc = sh(PY, "-m", "recon.cli", "validate", "data/")
     if rc:
         return rc
 
-    step("3/3  Reconcile" + (" (LLM enabled)" if with_llm else " (offline)"))
+    step("3/5  Difficulty sweep (feeds section 4 of the report)")
+    rc = sh(PY, "-m", "recon.cli", "sweep", "data/", "--ratios", "0.2,0.4,0.6")
+    if rc:
+        return rc
+
+    step("4/5  Adversarial self-test of the verification gate")
+    rc = sh(PY, "-m", "recon.cli", "selftest", "data/")
+    if rc:
+        return rc
+
+    step("5/5  Reconcile" + (" (LLM enabled)" if with_llm else " (offline)"))
     cmd = [PY, "-m", "recon.cli", "run", "data/"]
     if not with_llm:
         cmd.append("--no-llm")
