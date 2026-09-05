@@ -1,9 +1,10 @@
 """Command-line interface.
 
-Phase 1 implements ``generate`` and ``validate``. ``run`` and ``sweep`` are
-declared but not yet implemented -- they land in Phases 2 and 5. They exit
-with a clear message rather than a stack trace so the surface is honest about
-what exists today.
+    generate   synthetic data + ground truth
+    validate   ground-truth self-consistency checks
+    run        the reconciliation pipeline, with or without the LLM layer
+    sweep      the same pipeline at several difficulty mixes
+    selftest   prove the verification gate rejects corrupted matches
 """
 
 from __future__ import annotations
@@ -43,9 +44,9 @@ def cmd_validate(args) -> int:
 def cmd_run(args) -> int:
     """Run the reconciliation pipeline and report metrics.
 
-    Phase 2: deterministic stages 1-3 only. The baseline is persisted before
-    any LLM layer exists, so the later comparison cannot be contaminated by
-    re-running the deterministic stages under different conditions.
+    The deterministic baseline is measured and persisted before the LLM layer
+    is called at all, so the ablation compares like with like: no later stage
+    can quietly re-run the deterministic stages under different conditions.
     """
     import json
     import time
@@ -122,9 +123,9 @@ def cmd_run(args) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # --- LLM proposal layer -----------------------------------------------
-    # Proposals are collected here but NOT accepted: the verification gate
-    # that decides which of them become matches lands in Phase 4. Nothing the
-    # model says has been allowed to affect the metrics above.
+    # Nothing the model proposes is a match until verify.py passes it. The
+    # metrics printed above are the deterministic baseline and are already
+    # persisted, so no proposal can retroactively change them.
     llm_stats = None
     gate_summary = None
     proposals = []
@@ -452,12 +453,6 @@ def cmd_sweep(args) -> int:
     print("  the next `run` will include this table in its report")
     return 0
 
-
-def cmd_not_yet(phase: str):
-    def _run(args) -> int:
-        print("not implemented yet - lands in %s" % phase, file=sys.stderr)
-        return 2
-    return _run
 
 
 def build_parser() -> argparse.ArgumentParser:

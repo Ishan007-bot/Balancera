@@ -13,7 +13,6 @@ time. That keeps the prompt hash stable so the cache actually hits.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 
 from .ingest import Dataset, parse_date
 from .models import BankTxn, Payment

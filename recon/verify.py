@@ -25,7 +25,6 @@ layer does real work rather than passing everything through.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 from enum import Enum
 
 from .ingest import Dataset, parse_date
